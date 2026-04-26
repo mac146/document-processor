@@ -13,6 +13,11 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
+@app.get("/")
+async def root():
+    return {"message": "Document Processor API is running"}
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
