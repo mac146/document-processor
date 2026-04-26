@@ -63,11 +63,31 @@ uvicorn main:app --reload
 
 Open Swagger docs at `http://127.0.0.1:8000/docs`.
 
+Live deployment:
+
+```text
+https://document-processor-production-cc18.up.railway.app
+```
+
 ## API Endpoints
 
 - `GET /health` - health check
 - `POST /process-document` - upload a PDF and start processing
 - `GET /result/{job_id}` - get job status and extracted result
+
+Final curl commands:
+
+Upload:
+
+```bash
+curl -X POST https://document-processor-production-cc18.up.railway.app/process-document -F "file=@/path/to/invoice.pdf"
+```
+
+Get result:
+
+```bash
+curl https://document-processor-production-cc18.up.railway.app/result/{job_id}
+```
 
 Example response:
 
@@ -94,4 +114,3 @@ Example response:
 - Scanned PDFs without extractable text are not supported
 - No OCR fallback yet
 - No authentication or test suite yet
-
