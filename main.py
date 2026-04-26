@@ -1,12 +1,13 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from contextlib import asynccontextmanager
-from database import init_db, create_job, get_job
+from database import init_db, create_job, get_job, mark_incomplete_jobs_failed
 from processor import process_document
 from models import JobCreatedResponse, JobResultResponse, ExtractedFields
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    await mark_incomplete_jobs_failed()
     yield
 
 app = FastAPI(lifespan=lifespan)
@@ -22,12 +23,13 @@ async def process_document_endpoint(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...)
 ):
-    # validate file type
-    if not file.filename.endswith(".pdf"):
+    filename = file.filename or ""
+    if not filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are accepted")
 
-    # read file bytes
     file_bytes = await file.read()
+    if not file_bytes.startswith(b"%PDF-"):
+        raise HTTPException(status_code=400, detail="Uploaded file is not a valid PDF")
 
     # create job in DB
     job_id = await create_job()

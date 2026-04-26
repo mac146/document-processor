@@ -33,6 +33,16 @@ async def create_job() -> str:
         await db.commit()
     return job_id
 
+async def mark_incomplete_jobs_failed():
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            UPDATE jobs SET
+                status = 'failed',
+                error = 'Processing interrupted by server restart'
+            WHERE status = 'processing'
+        """)
+        await db.commit()
+
 async def update_job_success(job_id: str, document_type: str, confidence: float,
                               extracted_fields: dict, page_count: int, processing_time_ms: int):
     async with aiosqlite.connect(DB_PATH) as db:

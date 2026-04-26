@@ -1,13 +1,16 @@
-import fitz  # PyMuPDF
+import asyncio
 import json
-import time
 import os
-from groq import Groq
+import time
+
+import fitz  # PyMuPDF
 from dotenv import load_dotenv
+from groq import Groq
 
 load_dotenv()
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+
 
 def extract_text_from_pdf(file_bytes: bytes) -> tuple[str, int]:
     doc = fitz.open(stream=file_bytes, filetype="pdf")
@@ -18,7 +21,7 @@ def extract_text_from_pdf(file_bytes: bytes) -> tuple[str, int]:
     doc.close()
 
     if not text.strip():
-        raise ValueError("Could not extract text — PDF appears to be scanned")
+        raise ValueError("Could not extract text - PDF appears to be scanned")
 
     return text, page_count
 
@@ -46,13 +49,12 @@ Document:
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[{"role": "user", "content": prompt}],
-        temperature=0.1
+        temperature=0.1,
     )
     processing_time_ms = int((time.time() - start) * 1000)
 
     raw = response.choices[0].message.content.strip()
 
-    # clean markdown if model wraps in backticks anyway
     if raw.startswith("```"):
         raw = raw.split("```")[1]
         if raw.startswith("json"):
@@ -64,24 +66,20 @@ Document:
 
 
 async def process_document(job_id: str, file_bytes: bytes):
-    from database import update_job_success, update_job_failed
+    from database import update_job_failed, update_job_success
 
     try:
-        # Step 1 — extract text
-        text, page_count = extract_text_from_pdf(file_bytes)
+        # Run blocking PDF parsing and Groq network I/O off the event loop.
+        text, page_count = await asyncio.to_thread(extract_text_from_pdf, file_bytes)
+        result, processing_time_ms = await asyncio.to_thread(call_groq, text)
 
-        # Step 2 — call Groq
-        result, processing_time_ms = call_groq(text)
-
-        # Step 3 — save to DB
         await update_job_success(
             job_id=job_id,
             document_type=result.get("document_type"),
             confidence=result.get("confidence"),
             extracted_fields=result.get("extracted_fields", {}),
             page_count=page_count,
-            processing_time_ms=processing_time_ms
+            processing_time_ms=processing_time_ms,
         )
-
     except Exception as e:
         await update_job_failed(job_id=job_id, error=str(e))
